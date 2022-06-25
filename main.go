@@ -25,7 +25,7 @@ var BuildVersion string = "0.0.0"
 
 var Debug bool = false
 var DebugMetricsNotifierPeriod time.Duration = 60
-var ListLengthWatcherPeriod time.Duration = 10
+var ListLengthWatcherPeriod time.Duration = 60
 
 type RedisRPushRequestStruct struct {
 	Channel string          `json:"channel"`
@@ -100,7 +100,7 @@ func ListLengthWatcher() {
 
 				result := rdb.LLen(ctx, channel)
 
-				log.Info().
+				log.Debug().
 					Str("channel", channel).
 					Time("last_seen", watchedRedisChannels[channel]).
 					Int64("length", result.Val()).
