@@ -9,18 +9,22 @@ RUN mkdir -p -v /src
 WORKDIR /src
 ADD . /src
 
+RUN apk add git
+RUN GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go get
 RUN GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go build -ldflags="-X 'main.BuildVersion=${BUILD_VERSION}'" -v -o "${PROGNAME}" .
 
 
 FROM alpine:3.15
 
-ARG LISTEN_ADDRESS="127.0.0.1"
-ARG LISTEN_PORT="8080"
+LABEL org.opencontainers.image.authors="Pavel Kim <hello@pavelkim.com>"
+LABEL org.opencontainers.image.description="TaskQ Redis Publisher"
 
-ARG REDIS_ADDRESS="127.0.0.1"
-ARG REDIS_PORT="8080"
+ENV LISTEN_ADDRESS="0.0.0.0"
+ENV LISTEN_PORT="8080"
+ENV REDIS_ADDRESS="127.0.0.1"
+ENV REDIS_PORT="6379"
 
 COPY --from=builder /src/publisher /publisher
+COPY --from=builder /src/entrypoint.sh /entrypoint.sh
 
-CMD ["-verbose", "-bind", "${LISTEN_ADDRESS}:${LISTEN_PORT}", "-redis-address", "${REDIS_ADDRESS}:${REDIS_PORT}"]
-ENTRYPOINT ["./publisher"]
+ENTRYPOINT ["./entrypoint.sh"]
