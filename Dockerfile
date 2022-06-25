@@ -16,18 +16,13 @@ RUN GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go build -ldflags="-X 'main.BuildV
 
 FROM alpine:3.15
 
-ARG LISTEN_ADDRESS="0.0.0.0"
-ARG LISTEN_PORT="8080"
-ENV LISTEN_ADDRESS="${LISTEN_ADDRESS}"
-ENV LISTEN_PORT="${LISTEN_PORT}"
-
-ARG REDIS_ADDRESS="127.0.0.1"
-ARG REDIS_PORT="6379"
-ENV REDIS_ADDRESS="${REDIS_ADDRESS}"
-ENV REDIS_PORT="${REDIS_PORT}"
+ENV LISTEN_ADDRESS="0.0.0.0"
+ENV LISTEN_PORT="8080"
+ENV REDIS_ADDRESS="127.0.0.1"
+ENV REDIS_PORT="6379"
 
 
 COPY --from=builder /src/publisher /publisher
+COPY --from=builder /src/entrypoint.sh /entrypoint.sh
 
-CMD ["-verbose", "-bind", "${LISTEN_ADDRESS}:${LISTEN_PORT}", "-redis-address", "${REDIS_ADDRESS}:${REDIS_PORT}"]
-ENTRYPOINT ["./publisher"]
+ENTRYPOINT ["./entrypoint.sh"]
