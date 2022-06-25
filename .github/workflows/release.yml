@@ -162,7 +162,7 @@ jobs:
       CAN_CREATE_RELEASE: ${{ needs.validate_new_version.outputs.can_create }}
       TAG_EXISTS: ${{ needs.validate_new_version.outputs.tag_exists }}
       BRANCH_NAME: ${{ needs.validate_new_version.outputs.branch_name }}
-      APP_NAME: "whoiser"
+      APP_NAME: "publisher"
 
     outputs:
       job_status: ${{ job.status }}
