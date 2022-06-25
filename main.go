@@ -25,6 +25,7 @@ var BuildVersion string = "0.0.0"
 
 var Debug bool = false
 var DebugMetricsNotifierPeriod time.Duration = 60
+var ListLengthWatcherPeriod time.Duration = 10
 
 type RedisRPushRequestStruct struct {
 	Channel string          `json:"channel"`
@@ -41,25 +42,29 @@ type handleSignalParamsStruct struct {
 }
 
 type MetricsStruct struct {
-	Index    int32
-	Warnings int32
-	Errors   int32
-	Success  int32
-	Put      int32
-	Started  time.Time
+	Index           int32
+	Warnings        int32
+	Errors          int32
+	Success         int32
+	Put             int32
+	Started         time.Time
+	WatchedChannels map[string]int64
 }
 
 var Configuration = ConfigurationStruct{}
 var handleSignalParams = handleSignalParamsStruct{}
 
+var watchedRedisChannels = make(map[string]time.Time)
+
 var MetricsNotifierPeriod int = 60
 var Metrics = MetricsStruct{
-	Index:    0,
-	Warnings: 0,
-	Errors:   0,
-	Success:  0,
-	Put:      0,
-	Started:  time.Now(),
+	Index:           0,
+	Warnings:        0,
+	Errors:          0,
+	Success:         0,
+	Put:             0,
+	Started:         time.Now(),
+	WatchedChannels: make(map[string]int64),
 }
 
 var ctx = context.Background()
@@ -78,6 +83,34 @@ func MetricsNotifier() {
 				Int32("Errors", Metrics.Errors).
 				Int32("Success", Metrics.Success).
 				Msg("Metrics")
+		}
+	}()
+}
+
+func ListLengthWatcher() {
+	go func() {
+		for {
+
+			for channel := range watchedRedisChannels {
+
+				log.Debug().
+					Str("channel", channel).
+					Time("last_seen", watchedRedisChannels[channel]).
+					Msgf("Checking channel length")
+
+				result := rdb.LLen(ctx, channel)
+
+				log.Info().
+					Str("channel", channel).
+					Time("last_seen", watchedRedisChannels[channel]).
+					Int64("length", result.Val()).
+					Msgf("LLEN results for watched channel")
+
+				Metrics.WatchedChannels[channel] = result.Val()
+
+			}
+
+			time.Sleep(ListLengthWatcherPeriod * time.Second)
 		}
 	}()
 }
@@ -115,17 +148,24 @@ func handlerIndex(rw http.ResponseWriter, req *http.Request) {
 
 func handlerMetrics(rw http.ResponseWriter, req *http.Request) {
 
-	fmt.Fprintf(rw, "# TYPE redis_pubsub_publisher_requests counter\n")
-	fmt.Fprintf(rw, "# HELP Number of the requests to the REST Gateway by type\n")
-	fmt.Fprintf(rw, "redis_pubsub_publisher_requests{method=\"put\"} %v\n", Metrics.Put)
+	fmt.Fprintf(rw, "# TYPE taskq_publisher_channel_len counter\n")
+	fmt.Fprintf(rw, "# HELP Last checked Redis channel length\n")
 
-	fmt.Fprintf(rw, "# TYPE redis_pubsub_publisher_errors counter\n")
+	for channel := range Metrics.WatchedChannels {
+		fmt.Fprintf(rw, "taskq_publisher_channel_len{channel=\"%v\"} %v\n", channel, Metrics.WatchedChannels[channel])
+	}
+
+	fmt.Fprintf(rw, "# TYPE taskq_publisher_requests counter\n")
+	fmt.Fprintf(rw, "# HELP Number of the requests to the TaskQ Publisher by type\n")
+	fmt.Fprintf(rw, "taskq_publisher_requests{method=\"put\"} %v\n", Metrics.Put)
+
+	fmt.Fprintf(rw, "# TYPE taskq_publisher_errors counter\n")
 	fmt.Fprintf(rw, "# HELP Number of the raised errors\n")
-	fmt.Fprintf(rw, "redis_pubsub_publisher_errors %v\n", Metrics.Errors)
+	fmt.Fprintf(rw, "taskq_publisher_errors %v\n", Metrics.Errors)
 
-	fmt.Fprintf(rw, "# TYPE redis_pubsub_publisher_index counter\n")
+	fmt.Fprintf(rw, "# TYPE taskq_publisher_index counter\n")
 	fmt.Fprintf(rw, "# HELP Number of the requests to /\n")
-	fmt.Fprintf(rw, "redis_pubsub_publisher_index %v\n", Metrics.Index)
+	fmt.Fprintf(rw, "taskq_publisher_index %v\n", Metrics.Index)
 
 }
 
@@ -182,6 +222,21 @@ func handlerPut(rw http.ResponseWriter, req *http.Request) {
 		Int("payload_size", len(RedisRPushRequest.Payload)).
 		Msgf("Published message successfully")
 
+	now := time.Now()
+
+	watchedRedisChannels[RedisRPushRequest.Channel] = now
+
+	log.Info().
+		Str("channel", RedisRPushRequest.Channel).
+		Time("time", now).
+		Msgf("Channel added to LLEN wathcher")
+
+	log.Info().
+		Uint64("uid", uid).
+		Str("channel", RedisRPushRequest.Channel).
+		Int("payload_size", len(RedisRPushRequest.Payload)).
+		Msgf("Published message successfully")
+
 	rw.WriteHeader(http.StatusOK)
 	return
 
@@ -226,6 +281,7 @@ func init() {
 	Configuration.ListenAddress = listen_address
 
 	handleSignal()
+	ListLengthWatcher()
 
 }
 
