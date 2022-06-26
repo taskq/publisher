@@ -226,16 +226,10 @@ func handlerPut(rw http.ResponseWriter, req *http.Request) {
 
 	watchedRedisChannels[RedisRPushRequest.Channel] = now
 
-	log.Info().
+	log.Debug().
 		Str("channel", RedisRPushRequest.Channel).
 		Time("time", now).
 		Msgf("Channel added to LLEN wathcher")
-
-	log.Info().
-		Uint64("uid", uid).
-		Str("channel", RedisRPushRequest.Channel).
-		Int("payload_size", len(RedisRPushRequest.Payload)).
-		Msgf("Published message successfully")
 
 	rw.WriteHeader(http.StatusOK)
 	return
