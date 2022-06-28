@@ -80,8 +80,8 @@ jobs:
       - name: Define artifact name
         id: set_artifact_name
         run: |
-          echo "::debug::Artifact name: ${{ env.APP_NAME }}-${{ env.TARGETOS }}-${{ env.TARGETARCH }}-${{env.PLANNED_VERSION}}"
-          echo "::set-output name=name::${{ env.APP_NAME }}-${{ env.TARGETOS }}-${{ env.TARGETARCH }}-${{env.PLANNED_VERSION}}"
+          echo "::debug::Artifact name: ${{ env.APP_NAME }}-${{env.PLANNED_VERSION}}-${{ env.TARGETOS }}-${{ env.TARGETARCH }}"
+          echo "::set-output name=name::${{ env.APP_NAME }}-${{env.PLANNED_VERSION}}-${{ env.TARGETOS }}-${{ env.TARGETARCH }}"
 
 
       - name: Build
