@@ -222,14 +222,13 @@ func handlerPut(rw http.ResponseWriter, req *http.Request) {
 		Int("payload_size", len(RedisRPushRequest.Payload)).
 		Msgf("Published message successfully")
 
-	now := time.Now()
+	// now := time.Now()
 
-	watchedRedisChannels[RedisRPushRequest.Channel] = now
+	// watchedRedisChannels[RedisRPushRequest.Channel] = now
 
-	log.Debug().
-		Str("channel", RedisRPushRequest.Channel).
-		Time("time", now).
-		Msgf("Channel added to LLEN wathcher")
+	// log.Debug().
+	// 	Str("channel", RedisRPushRequest.Channel).
+	// 	Msgf("Channel added to LLEN wathcher")
 
 	rw.WriteHeader(http.StatusOK)
 	return
@@ -275,7 +274,7 @@ func init() {
 	Configuration.ListenAddress = listen_address
 
 	handleSignal()
-	ListLengthWatcher()
+	// ListLengthWatcher()
 
 }
 
