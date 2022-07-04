@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	// "bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -235,6 +237,85 @@ func handlerPut(rw http.ResponseWriter, req *http.Request) {
 
 }
 
+func handlerBulk(rw http.ResponseWriter, req *http.Request) {
+
+	log.Info().Msgf("Processing incoming bulk request %v", req.URL)
+	_ = atomic.AddInt32(&Metrics.Put, 1)
+
+	file, _, err := req.FormFile("file")
+	if err != nil {
+		log.Error().Err(err).Msgf("Couldn't read file from request")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Msgf("Processing incoming bulk request %v", req.URL)
+
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+
+	RedisRPushRequestBulk := []RedisRPushRequestStruct{}
+
+	log.Debug().Msgf("Processing request data")
+	JSONDecoder := json.NewDecoder(reader)
+
+	err = JSONDecoder.Decode(&RedisRPushRequestBulk)
+	if err != nil {
+		_ = atomic.AddInt32(&Metrics.Errors, 1)
+		log.Err(err).Msgf("Error while JSON decoding the API request")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	for idx, RedisRPushRequest := range RedisRPushRequestBulk {
+
+		uid, err := flake.NextID()
+		if err != nil {
+			_ = atomic.AddInt32(&Metrics.Errors, 1)
+			log.Error().Err(err).Msgf("flake.NextID() failed")
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		log.Debug().
+			Uint64("uid", uid).
+			Int("idx", idx).
+			Int("len", len(RedisRPushRequestBulk)).
+			Str("channel", RedisRPushRequest.Channel).
+			Str("payload", string(RedisRPushRequest.Payload)).
+			Int("payload_size", len(RedisRPushRequest.Payload)).
+			Msgf("Publishing message")
+
+		log.Info().
+			Uint64("uid", uid).
+			Int("idx", idx).
+			Int("len", len(RedisRPushRequestBulk)).
+			Str("channel", RedisRPushRequest.Channel).
+			Int("payload_size", len(RedisRPushRequest.Payload)).
+			Msgf("Publishing message")
+
+		err = rdb.RPush(ctx, RedisRPushRequest.Channel, string(RedisRPushRequest.Payload)).Err()
+		if err != nil {
+			_ = atomic.AddInt32(&Metrics.Errors, 1)
+			log.Error().Err(err).Msgf("Couldn't publish message")
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		log.Info().
+			Uint64("uid", uid).
+			Str("channel", RedisRPushRequest.Channel).
+			Int("payload_size", len(RedisRPushRequest.Payload)).
+			Msgf("Published message successfully")
+	}
+
+	rw.WriteHeader(http.StatusOK)
+	return
+
+}
+
 func init() {
 
 	bindPtr := flag.String("bind", "127.0.0.1:8080", "Address and port to listen")
@@ -302,6 +383,7 @@ func main() {
 
 	http.HandleFunc("/", handlerIndex)
 	http.HandleFunc("/put", handlerPut)
+	http.HandleFunc("/bulk", handlerBulk)
 	http.HandleFunc("/metrics", handlerMetrics)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
